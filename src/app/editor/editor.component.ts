@@ -14,7 +14,7 @@ import {
   NodeType,
   PortModel,
   PortType,
-  EdgeModel,
+  EdgeModel, EditorSnapshot,
 } from './editor.service';
 
 @Component({
@@ -59,6 +59,44 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.stage.destroy();
   }
+
+  public loadFromSnapshot(snapshot: EditorSnapshot): void {
+    // 1. Очистить текущее состояние
+    this.clearEditor();
+
+    // 2. Создать ноды
+    snapshot.nodes.forEach((node) => {
+      this.createNode(
+        node.id,
+        node.type,
+        node.position,
+        node.type.toUpperCase(),
+      );
+    });
+
+    // 3. Создать связи
+    snapshot.edges.forEach((edge) => {
+      const fromPort = this.editorState.findPort(edge.fromPortId);
+      const toPort = this.editorState.findPort(edge.toPortId);
+
+      if (fromPort && toPort) {
+        this.createEdge(fromPort, toPort);
+      }
+    });
+  }
+
+  private clearEditor(): void {
+    this.editorState.clear();
+
+    this.nodeLayer?.destroyChildren();
+    this.edgeLayer?.destroyChildren();
+    this.backgroundLayer?.destroyChildren();
+
+    this.nodeLayer?.draw();
+    this.edgeLayer?.draw();
+    this.drawBackgroundGrid();
+  }
+
 
   // ---------- STAGE ----------
 
