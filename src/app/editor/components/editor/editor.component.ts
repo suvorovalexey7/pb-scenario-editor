@@ -20,6 +20,7 @@ import { IPort } from '../../interfaces/port.interface';
 
 import { NodeType } from '../../types/node.type';
 import { PortType } from '../../types/port.type';
+import { EdgeGeometryCalculator } from '../../helpers/edge-geometry-calculator';
 
 @Component({
   selector: 'app-editor',
@@ -186,6 +187,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private seedDemoNodes(): void {
     this.createNode('trigger-1', 'trigger', { x: 120, y: 220 }, 'Trigger');
     this.createNode('action-1', 'action', { x: 420, y: 220 }, 'Action');
+    this.createNode('action-2', 'action', { x: 620, y: 520 }, 'Action');
   }
 
   private createNode(
@@ -330,6 +332,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       toNodeId: to.nodeId,
       fromPortId: from.id,
       toPortId: to.id,
+      type: 'straight',
       line,
     };
 
@@ -345,19 +348,29 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateEdgeGeometry(edge: IEdge): void {
-    const from = this.editorState.findPort(edge.fromPortId);
-    const to = this.editorState.findPort(edge.toPortId);
-    if (!from || !to) {
+    const fromPort = this.editorState.findPort(edge.fromPortId);
+    const toPort = this.editorState.findPort(edge.toPortId);
+    if (!fromPort || !toPort) {
       return;
     }
 
-    const t = this.stage.getAbsoluteTransform().copy();
-    t.invert();
+    const stageTransform = this.stage.getAbsoluteTransform().copy();
+    stageTransform.invert();
 
-    const p1 = t.point(from.circle.getAbsolutePosition());
-    const p2 = t.point(to.circle.getAbsolutePosition());
+    const from = stageTransform.point(
+      fromPort.circle.getAbsolutePosition()
+    );
+    const to = stageTransform.point(
+      toPort.circle.getAbsolutePosition()
+    );
 
-    edge.line.points([p1.x, p1.y, p2.x, p2.y]);
+    const points = EdgeGeometryCalculator.calculate({
+      from,
+      to,
+      type: edge.type,
+    });
+
+    edge.line.points(points);
     edge.line.getLayer()?.batchDraw();
   }
 

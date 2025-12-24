@@ -1,4 +1,5 @@
 import Konva from 'konva';
+import { EdgeType } from '../types/edge.type';
 
 /**
  * Ребро (линия связи между нодами).
@@ -10,5 +11,6 @@ export interface IEdge {
   toNodeId: string;
   fromPortId: string;
   toPortId: string;
+  type: EdgeType;
   line: Konva.Line;
 }
