@@ -16,6 +16,7 @@ import {
   PortType,
   EdgeModel, EditorSnapshot,
 } from '../../services/editor-state.service';
+import { PanZoomController } from '../../controllers/pan-zoom.controller';
 
 @Component({
   selector: 'app-editor',
@@ -27,13 +28,12 @@ import {
 export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('container', { static: true }) containerRef!: ElementRef<HTMLDivElement>;
 
+  private panZoomController!: PanZoomController;
+
   private stage!: Konva.Stage;
   private backgroundLayer!: Konva.Layer;
   private edgeLayer!: Konva.Layer;
   private nodeLayer!: Konva.Layer;
-
-  private isPanning = false;
-  private lastPanPosition?: Konva.Vector2d;
 
   private activeOutputPort?: PortModel;
   private hoveredInputPort?: PortModel;
@@ -143,7 +143,32 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.stage.add(this.backgroundLayer, this.edgeLayer, this.nodeLayer);
 
     this.drawBackgroundGrid();
-    this.setupPanAndZoom();
+
+    this.panZoomController = new PanZoomController(this.stage);
+
+    this.stage.on('mousedown', (e) => {
+      this.panZoomController.onMouseDown(e);
+    });
+
+    this.stage.on('mousemove', () => {
+      // TEMP EDGE
+      if (this.activeOutputPort && this.tempLine) {
+        this.updateTempLine();
+      }
+
+      // PAN
+      this.panZoomController.onMouseMove();
+    });
+
+    this.stage.on('mouseup', () => {
+      this.panZoomController.onMouseUp();
+      this.finishTempEdge();
+    });
+
+    this.stage.on('wheel', (e) => {
+      this.panZoomController.onWheel(e);
+    });
+
     this.seedDemoNodes();
   }
 
@@ -170,72 +195,6 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     }
 
     this.backgroundLayer.draw();
-  }
-
-  // ---------- PAN / ZOOM ----------
-
-  private setupPanAndZoom(): void {
-    this.stage.on('mousedown', (e) => {
-      if (e.target === this.stage) {
-        this.isPanning = true;
-        this.lastPanPosition = this.stage.getPointerPosition() ?? undefined;
-      }
-    });
-
-    this.stage.on('mouseup', () => {
-      this.isPanning = false;
-      this.lastPanPosition = undefined;
-      this.finishTempEdge();
-    });
-
-    this.stage.on('mousemove', () => {
-      if (this.activeOutputPort && this.tempLine) {
-        this.updateTempLine();
-      }
-
-      if (!this.isPanning || !this.lastPanPosition) {
-        return;
-      }
-
-      const pointer = this.stage.getPointerPosition();
-      if (!pointer) {
-        return;
-      }
-
-      this.stage.position({
-        x: this.stage.x() + pointer.x - this.lastPanPosition.x,
-        y: this.stage.y() + pointer.y - this.lastPanPosition.y,
-      });
-
-      this.lastPanPosition = pointer;
-      this.stage.batchDraw();
-    });
-
-    this.stage.on('wheel', (e) => {
-      e.evt.preventDefault();
-
-      const scaleBy = 1.05;
-      const oldScale = this.stage.scaleX();
-      const pointer = this.stage.getPointerPosition();
-      if (!pointer) {
-        return;
-      }
-
-      const mousePointTo = {
-        x: (pointer.x - this.stage.x()) / oldScale,
-        y: (pointer.y - this.stage.y()) / oldScale,
-      };
-
-      const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
-      this.stage.scale({ x: newScale, y: newScale });
-
-      this.stage.position({
-        x: pointer.x - mousePointTo.x * newScale,
-        y: pointer.y - mousePointTo.y * newScale,
-      });
-
-      this.stage.batchDraw();
-    });
   }
 
   // ---------- NODES ----------
