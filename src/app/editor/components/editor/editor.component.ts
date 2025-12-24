@@ -8,16 +8,18 @@ import {
   ViewChild,
 } from '@angular/core';
 import Konva from 'konva';
-import {
-  EditorStateService,
-} from '../../services/editor-state.service';
+
+import { EditorStateService } from '../../services/editor-state.service';
 import { PanZoomController } from '../../controllers/pan-zoom.controller';
+import { EdgeInteractionController } from '../../controllers/edge-interaction.controller';
+
 import { IEditorSnapshot } from '../../interfaces/editor-snapshot.interface';
 import { IEdge } from '../../interfaces/edge.interface';
-import { PortType } from '../../types/port.type';
-import { NodeType } from '../../types/node.type';
 import { INode } from '../../interfaces/node.interface';
 import { IPort } from '../../interfaces/port.interface';
+
+import { NodeType } from '../../types/node.type';
+import { PortType } from '../../types/port.type';
 
 @Component({
   selector: 'app-editor',
@@ -29,15 +31,14 @@ import { IPort } from '../../interfaces/port.interface';
 export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('container', { static: true }) containerRef!: ElementRef<HTMLDivElement>;
 
-  private panZoomController!: PanZoomController;
-
   private stage!: Konva.Stage;
   private backgroundLayer!: Konva.Layer;
   private edgeLayer!: Konva.Layer;
   private nodeLayer!: Konva.Layer;
 
-  private activeOutputPort?: IPort;
-  private hoveredInputPort?: IPort;
+  private panZoomController!: PanZoomController;
+  private edgeController = new EdgeInteractionController();
+
   private tempLine?: Konva.Line;
 
   constructor(
@@ -53,52 +54,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.stage.destroy();
   }
 
-  private loadFromSnapshot(snapshot: IEditorSnapshot): void {
-    // 1. Очистить текущее состояние
-    this.clearEditor();
+  // ---------- SNAPSHOT ----------
 
-    // 2. Создать ноды
-    snapshot.nodes.forEach((node) => {
-      this.createNode(
-        node.id,
-        node.type,
-        node.position,
-        node.type.toUpperCase(),
-      );
-    });
-
-    // 3. Создать связи
-    snapshot.edges.forEach((edge) => {
-      const fromPort = this.editorState.findPort(edge.fromPortId);
-      const toPort = this.editorState.findPort(edge.toPortId);
-
-      if (fromPort && toPort) {
-        this.createEdge(fromPort, toPort);
-      }
-    });
-  }
-
-  private clearEditor(): void {
-    this.editorState.clear();
-
-    this.nodeLayer?.destroyChildren();
-    this.edgeLayer?.destroyChildren();
-    this.backgroundLayer?.destroyChildren();
-
-    this.nodeLayer?.draw();
-    this.edgeLayer?.draw();
-    this.drawBackgroundGrid();
-  }
-
-  // SETTINGS PANEL
-
-  getSnapshot() {
-    const snapshot = this.editorState.exportSnapshot();
-    console.log(snapshot);
+  getSnapshot(): void {
+    console.log(this.editorState.exportSnapshot());
   }
 
   setSnapshot(): void {
-    const mockSnapshot = {
+    const mockSnapshot: IEditorSnapshot = {
       nodes: [
         {
           id: 'trigger-1',
@@ -113,18 +76,41 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       ],
       edges: [
         {
-          id: 'edge-1766527229784',
+          id: 'edge-1',
           fromNodeId: 'trigger-1',
           fromPortId: 'trigger-1-output-port',
           toNodeId: 'action-1',
           toPortId: 'action-1-input-port',
         },
       ],
-    } as IEditorSnapshot;
+    };
 
     this.loadFromSnapshot(mockSnapshot);
   }
 
+  private loadFromSnapshot(snapshot: IEditorSnapshot): void {
+    this.clearEditor();
+
+    snapshot.nodes.forEach((node) => {
+      this.createNode(node.id, node.type, node.position, node.type.toUpperCase());
+    });
+
+    snapshot.edges.forEach((edge) => {
+      const from = this.editorState.findPort(edge.fromPortId);
+      const to = this.editorState.findPort(edge.toPortId);
+      if (from && to) {
+        this.createEdge(from, to);
+      }
+    });
+  }
+
+  private clearEditor(): void {
+    this.editorState.clear();
+    this.nodeLayer.destroyChildren();
+    this.edgeLayer.destroyChildren();
+    this.backgroundLayer.destroyChildren();
+    this.drawBackgroundGrid();
+  }
 
   // ---------- STAGE ----------
 
@@ -152,18 +138,15 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     });
 
     this.stage.on('mousemove', () => {
-      // TEMP EDGE
-      if (this.activeOutputPort && this.tempLine) {
-        this.updateTempLine();
+      if (this.edgeController.isDragging() && this.tempLine) {
+        this.updateTempEdge();
       }
-
-      // PAN
       this.panZoomController.onMouseMove();
     });
 
     this.stage.on('mouseup', () => {
       this.panZoomController.onMouseUp();
-      this.finishTempEdge();
+      this.finishEdgeDrag();
     });
 
     this.stage.on('wheel', (e) => {
@@ -202,9 +185,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private seedDemoNodes(): void {
     this.createNode('trigger-1', 'trigger', { x: 120, y: 220 }, 'Trigger');
-    this.createNode('trigger-2', 'trigger', { x: 130, y: 440 }, 'Trigger 2');
     this.createNode('action-1', 'action', { x: 420, y: 220 }, 'Action');
-    this.createNode('action-2', 'action', { x: 620, y: 420 }, 'Action 2');
   }
 
   private createNode(
@@ -246,21 +227,22 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.nodeLayer.add(group);
     this.nodeLayer.draw();
 
-    const nodeModel: INode = { id, type, group, ports };
-    this.editorState.addNode(nodeModel);
+    this.editorState.addNode({ id, type, group, ports });
 
-    group.on('dragmove', () => {
-      this.updateEdgesForNode(id);
-    });
+    group.on('dragmove', () => this.updateEdgesForNode(id));
 
     ports.output.circle.on('mousedown', (e) => {
       e.cancelBubble = true;
-      this.startTempEdge(ports.output!);
+      this.startEdgeDrag(ports.output!);
     });
 
     if (ports.input) {
-      ports.input.circle.on('mouseenter', () => (this.hoveredInputPort = ports.input));
-      ports.input.circle.on('mouseleave', () => (this.hoveredInputPort = undefined));
+      ports.input.circle.on('mouseenter', () =>
+        this.edgeController.setHoveredInput(ports.input),
+      );
+      ports.input.circle.on('mouseleave', () =>
+        this.edgeController.setHoveredInput(undefined),
+      );
     }
   }
 
@@ -271,21 +253,23 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     group: Konva.Group,
     x = 0,
   ): IPort {
-    const id = `${nodeId}-${type}-port`;
-    const circle = new Konva.Circle({
-      x,
-      y,
-      radius: 7,
-      fill: type === 'input' ? '#0ea5e9' : '#f97316',
-    });
-
-    return { id, nodeId, type, circle };
+    return {
+      id: `${nodeId}-${type}-port`,
+      nodeId,
+      type,
+      circle: new Konva.Circle({
+        x,
+        y,
+        radius: 7,
+        fill: type === 'input' ? '#0ea5e9' : '#f97316',
+      }),
+    };
   }
 
   // ---------- EDGES ----------
 
-  private startTempEdge(port: IPort): void {
-    this.activeOutputPort = port;
+  private startEdgeDrag(port: IPort): void {
+    this.edgeController.startDrag(port);
 
     const from = this.getPortStagePosition(port);
     this.tempLine = new Konva.Line({
@@ -298,8 +282,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.edgeLayer.draw();
   }
 
-  private updateTempLine(): void {
-    if (!this.activeOutputPort || !this.tempLine) {
+  private updateTempEdge(): void {
+    const output = this.edgeController.getActiveOutput();
+    if (!output || !this.tempLine) {
       return;
     }
 
@@ -308,29 +293,30 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    const from = this.getPortStagePosition(this.activeOutputPort);
+    const from = this.getPortStagePosition(output);
     const to = this.toStageCoords(pointer);
 
     this.tempLine.points([from.x, from.y, to.x, to.y]);
     this.edgeLayer.batchDraw();
   }
 
-  private finishTempEdge(): void {
-    if (this.activeOutputPort && this.hoveredInputPort) {
-      this.createEdge(this.activeOutputPort, this.hoveredInputPort);
+  private finishEdgeDrag(): void {
+    const result = this.edgeController.finishDrag();
+
+    if (result) {
+      this.createEdge(result.from, result.to);
     }
 
     this.tempLine?.destroy();
     this.tempLine = undefined;
-    this.activeOutputPort = undefined;
   }
 
-  private createEdge(fromPort: IPort, toPort: IPort): void {
-    const from = this.getPortStagePosition(fromPort);
-    const to = this.getPortStagePosition(toPort);
+  private createEdge(from: IPort, to: IPort): void {
+    const p1 = this.getPortStagePosition(from);
+    const p2 = this.getPortStagePosition(to);
 
     const line = new Konva.Line({
-      points: [from.x, from.y, to.x, to.y],
+      points: [p1.x, p1.y, p2.x, p2.y],
       stroke: '#e5e7eb',
       strokeWidth: 2,
     });
@@ -340,10 +326,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     const edge: IEdge = {
       id: `edge-${Date.now()}`,
-      fromNodeId: fromPort.nodeId,
-      toNodeId: toPort.nodeId,
-      fromPortId: fromPort.id,
-      toPortId: toPort.id,
+      fromNodeId: from.nodeId,
+      toNodeId: to.nodeId,
+      fromPortId: from.id,
+      toPortId: to.id,
       line,
     };
 
@@ -359,29 +345,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateEdgeGeometry(edge: IEdge): void {
-    const fromPort = this.editorState.findPort(edge.fromPortId);
-    const toPort = this.editorState.findPort(edge.toPortId);
-    if (!fromPort || !toPort) {
+    const from = this.editorState.findPort(edge.fromPortId);
+    const to = this.editorState.findPort(edge.toPortId);
+    if (!from || !to) {
       return;
     }
 
-    const stageTransform = this.stage.getAbsoluteTransform().copy();
-    stageTransform.invert();
+    const t = this.stage.getAbsoluteTransform().copy();
+    t.invert();
 
-    const fromAbs = fromPort.circle.getAbsolutePosition();
-    const toAbs = toPort.circle.getAbsolutePosition();
+    const p1 = t.point(from.circle.getAbsolutePosition());
+    const p2 = t.point(to.circle.getAbsolutePosition());
 
-    const from = stageTransform.point(fromAbs);
-    const to = stageTransform.point(toAbs);
-
-    edge.line.points([from.x, from.y, to.x, to.y]);
+    edge.line.points([p1.x, p1.y, p2.x, p2.y]);
     edge.line.getLayer()?.batchDraw();
   }
 
   private toStageCoords(point: Konva.Vector2d): Konva.Vector2d {
-    const transform = this.stage.getAbsoluteTransform().copy();
-    transform.invert();
-    return transform.point(point);
+    const t = this.stage.getAbsoluteTransform().copy();
+    t.invert();
+    return t.point(point);
   }
 
   private getPortStagePosition(port: IPort): Konva.Vector2d {
