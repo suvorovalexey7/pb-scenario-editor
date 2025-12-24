@@ -15,21 +15,13 @@ import {
   PortModel,
   PortType,
   EdgeModel, EditorSnapshot,
-} from './editor.service';
+} from '../../services/editor-state.service';
 
 @Component({
   selector: 'app-editor',
   standalone: true,
-  template: `<div #container class="editor-container"></div>`,
-  styles: [
-    `
-      .editor-container {
-        height: 100vh;
-        width: 100%;
-        background: #0f172a;
-      }
-    `,
-  ],
+  templateUrl: './editor.component.html',
+  styleUrls: ['./editor.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
@@ -60,7 +52,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.stage.destroy();
   }
 
-  public loadFromSnapshot(snapshot: EditorSnapshot): void {
+  private loadFromSnapshot(snapshot: EditorSnapshot): void {
     // 1. Очистить текущее состояние
     this.clearEditor();
 
@@ -95,6 +87,41 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.nodeLayer?.draw();
     this.edgeLayer?.draw();
     this.drawBackgroundGrid();
+  }
+
+  // SETTINGS PANEL
+
+  getSnapshot() {
+    const snapshot = this.editorState.exportSnapshot();
+    console.log(snapshot);
+  }
+
+  setSnapshot(): void {
+    const mockSnapshot = {
+      nodes: [
+        {
+          id: 'trigger-1',
+          type: 'trigger',
+          position: { x: 120, y: 220 },
+        },
+        {
+          id: 'action-1',
+          type: 'action',
+          position: { x: 420, y: 220 },
+        },
+      ],
+      edges: [
+        {
+          id: 'edge-1766527229784',
+          fromNodeId: 'trigger-1',
+          fromPortId: 'trigger-1-output-port',
+          toNodeId: 'action-1',
+          toPortId: 'action-1-input-port',
+        },
+      ],
+    } as EditorSnapshot;
+
+    this.loadFromSnapshot(mockSnapshot);
   }
 
 
