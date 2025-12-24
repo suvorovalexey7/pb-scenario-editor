@@ -10,13 +10,14 @@ import {
 import Konva from 'konva';
 import {
   EditorStateService,
-  NodeModel,
-  NodeType,
-  PortModel,
-  PortType,
-  EdgeModel, EditorSnapshot,
 } from '../../services/editor-state.service';
 import { PanZoomController } from '../../controllers/pan-zoom.controller';
+import { IEditorSnapshot } from '../../interfaces/editor-snapshot.interface';
+import { IEdge } from '../../interfaces/edge.interface';
+import { PortType } from '../../types/port.type';
+import { NodeType } from '../../types/node.type';
+import { INode } from '../../interfaces/node.interface';
+import { IPort } from '../../interfaces/port.interface';
 
 @Component({
   selector: 'app-editor',
@@ -35,8 +36,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private edgeLayer!: Konva.Layer;
   private nodeLayer!: Konva.Layer;
 
-  private activeOutputPort?: PortModel;
-  private hoveredInputPort?: PortModel;
+  private activeOutputPort?: IPort;
+  private hoveredInputPort?: IPort;
   private tempLine?: Konva.Line;
 
   constructor(
@@ -52,7 +53,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.stage.destroy();
   }
 
-  private loadFromSnapshot(snapshot: EditorSnapshot): void {
+  private loadFromSnapshot(snapshot: IEditorSnapshot): void {
     // 1. Очистить текущее состояние
     this.clearEditor();
 
@@ -119,7 +120,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
           toPortId: 'action-1-input-port',
         },
       ],
-    } as EditorSnapshot;
+    } as IEditorSnapshot;
 
     this.loadFromSnapshot(mockSnapshot);
   }
@@ -233,7 +234,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       align: 'center',
     });
 
-    const ports: NodeModel['ports'] = {};
+    const ports: INode['ports'] = {};
 
     if (type === 'action') {
       ports.input = this.createPort(id, 'input', 35, group);
@@ -245,7 +246,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.nodeLayer.add(group);
     this.nodeLayer.draw();
 
-    const nodeModel: NodeModel = { id, type, group, ports };
+    const nodeModel: INode = { id, type, group, ports };
     this.editorState.addNode(nodeModel);
 
     group.on('dragmove', () => {
@@ -269,7 +270,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     y: number,
     group: Konva.Group,
     x = 0,
-  ): PortModel {
+  ): IPort {
     const id = `${nodeId}-${type}-port`;
     const circle = new Konva.Circle({
       x,
@@ -283,7 +284,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   // ---------- EDGES ----------
 
-  private startTempEdge(port: PortModel): void {
+  private startTempEdge(port: IPort): void {
     this.activeOutputPort = port;
 
     const from = this.getPortStagePosition(port);
@@ -324,7 +325,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.activeOutputPort = undefined;
   }
 
-  private createEdge(fromPort: PortModel, toPort: PortModel): void {
+  private createEdge(fromPort: IPort, toPort: IPort): void {
     const from = this.getPortStagePosition(fromPort);
     const to = this.getPortStagePosition(toPort);
 
@@ -337,7 +338,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.edgeLayer.add(line);
     this.edgeLayer.draw();
 
-    const edge: EdgeModel = {
+    const edge: IEdge = {
       id: `edge-${Date.now()}`,
       fromNodeId: fromPort.nodeId,
       toNodeId: toPort.nodeId,
@@ -357,7 +358,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private updateEdgeGeometry(edge: EdgeModel): void {
+  private updateEdgeGeometry(edge: IEdge): void {
     const fromPort = this.editorState.findPort(edge.fromPortId);
     const toPort = this.editorState.findPort(edge.toPortId);
     if (!fromPort || !toPort) {
@@ -383,7 +384,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     return transform.point(point);
   }
 
-  private getPortStagePosition(port: PortModel): Konva.Vector2d {
+  private getPortStagePosition(port: IPort): Konva.Vector2d {
     return this.toStageCoords(port.circle.getAbsolutePosition());
   }
 }
