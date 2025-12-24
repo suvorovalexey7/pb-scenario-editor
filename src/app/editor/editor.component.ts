@@ -215,7 +215,9 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private seedDemoNodes(): void {
     this.createNode('trigger-1', 'trigger', { x: 120, y: 220 }, 'Trigger');
+    this.createNode('trigger-2', 'trigger', { x: 130, y: 440 }, 'Trigger 2');
     this.createNode('action-1', 'action', { x: 420, y: 220 }, 'Action');
+    this.createNode('action-2', 'action', { x: 620, y: 420 }, 'Action 2');
   }
 
   private createNode(
