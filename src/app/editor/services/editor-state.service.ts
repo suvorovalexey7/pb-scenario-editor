@@ -13,10 +13,20 @@ export class EditorStateService {
   readonly nodes = new Map<string, INode>();
 
   /**
-   * Хранилище всех рёбер редактора.
+   * Хранилище всех соединительных линий.
    * key = edgeId
    */
   readonly edges = new Map<string, IEdge>();
+
+  /**
+   * Выделенные ноды.
+   */
+  readonly selectedNodes = new Set<string>();
+
+  /**
+   * Выделенные соединительные линии.
+   */
+  readonly selectedEdges = new Set<string>();
 
   /**
    * Делает ноду известной редактору.
@@ -118,5 +128,29 @@ export class EditorStateService {
     // В будущем, когда state станет чистым (без Konva),
     // здесь будет полноценное восстановление.
     void snapshot;
+  }
+
+  selectNode(id: string, multi = false): void {
+    if (!multi) {
+      this.selectedNodes.clear();
+    }
+    this.selectedNodes.add(id);
+  }
+
+  deselectNode(id: string): void {
+    this.selectedNodes.delete(id);
+  }
+
+  toggleNode(id: string): void {
+    if (this.selectedNodes.has(id)) {
+      this.selectedNodes.delete(id);
+    } else {
+      this.selectedNodes.add(id);
+    }
+  }
+
+  clearSelection(): void {
+    this.selectedNodes.clear();
+    this.selectedEdges.clear();
   }
 }
