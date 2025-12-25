@@ -448,14 +448,20 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.nodeLayer.batchDraw();
   }
 
+  // Обрабатываем хоткеи
   private handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       this.deleteSelection();
     }
+
+    // Ctrl + D
+    if (e.key.toLowerCase() === 'd' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.duplicateSelection();
+    }
   };
 
   private deleteSelection(): void {
-
     // ---- Удаляем выделенные ребра ----
     for (const edgeId of Array.from(this.editorState.selectedEdges)) {
       const edge = this.editorState.edges.get(edgeId);
@@ -490,5 +496,44 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     this.editorState.clearSelection();
   }
+
+  private duplicateSelection(): void {
+    const selected = Array.from(this.editorState.selectedNodes);
+
+    if (!selected.length) return;
+
+    const newNodeIds = new Map<string, string>(); // oldId -> newId
+
+    for (const nodeId of selected) {
+      const node = this.editorState.nodes.get(nodeId);
+      if (!node) continue;
+
+      // Нельзя дублировать trigger
+      if (node.type === 'trigger') continue;
+
+      const newId = `${node.type}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      const pos = node.group.position();
+
+      // создаём НОВЫЙ блок
+      this.createNode(
+        newId,
+        node.type,
+        { x: pos.x + 40, y: pos.y + 40 }, // ⚡️ смещение, чтобы не накладывались
+        `Copy of ${newId}`,
+      );
+
+      newNodeIds.set(nodeId, newId);
+    }
+
+    // обновляем selection на новые
+    this.editorState.clearSelection();
+    for (const id of newNodeIds.values()) {
+      this.editorState.selectedNodes.add(id);
+    }
+
+    this.nodeLayer.batchDraw();
+  }
+
 
 }
