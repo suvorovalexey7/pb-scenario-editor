@@ -135,6 +135,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.panZoomController = new PanZoomController(this.stage);
 
     this.stage.on('mousedown', (e) => {
+      // клик именно по фону (stage), а не по ноде/линии/порту
+      if (e.target === this.stage) {
+        this.editorState.clearSelection();
+        this.refreshSelectionView();
+      }
+
       this.panZoomController.onMouseDown(e);
     });
 
@@ -207,6 +213,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       height: 70,
       fill: type === 'trigger' ? '#0ea5e9' : '#22c55e',
       cornerRadius: 10,
+      name: 'node-rect',
+      strokeWidth: 0,
     });
 
     const text = new Konva.Text({
@@ -245,6 +253,22 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.editorState.addNode({ id, type, group, ports });
 
     group.on('dragmove', () => this.updateEdgesForNode(id));
+
+    group.on('mousedown', (e) => {
+      // чтобы клик по ноде не запускал pan на stage
+      e.cancelBubble = true;
+
+      const isMulti =
+        e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey;
+
+      if (isMulti) {
+        this.editorState.toggleNode(id);
+      } else {
+        this.editorState.selectNode(id);
+      }
+
+      this.refreshSelectionView();
+    });
 
     ports.outputs.forEach(output => {
       output.circle.on('mousedown', (e) => {
@@ -398,4 +422,26 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private getPortStagePosition(port: IPort): Konva.Vector2d {
     return this.toStageCoords(port.circle.getAbsolutePosition());
   }
+
+  private refreshSelectionView(): void {
+    for (const node of this.editorState.nodes.values()) {
+      const isSelected = this.editorState.selectedNodes.has(node.id);
+
+      const rect = node.group.findOne<Konva.Rect>('.node-rect');
+      if (!rect) {
+        continue;
+      }
+
+      if (isSelected) {
+        rect.stroke('#cd19b1');  // голубая рамка
+        rect.strokeWidth(3);
+      } else {
+        rect.stroke(undefined as any);
+        rect.strokeWidth(0);
+      }
+    }
+
+    this.nodeLayer.batchDraw();
+  }
+
 }
