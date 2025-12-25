@@ -22,6 +22,7 @@ import { NodeType } from '../../types/node.type';
 import { PortType } from '../../types/port.type';
 import { EdgeGeometryCalculator } from '../../helpers/edge-geometry-calculator';
 import { SelectionController } from '../../controllers/selection.controller';
+import { UndoRedoService } from '../../services/undo-redo.service';
 
 @Component({
   selector: 'app-editor',
@@ -48,17 +49,18 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private tempLine?: Konva.Line;
 
   constructor(
+    public readonly undoRedo: UndoRedoService,
     private readonly zone: NgZone,
     private readonly editorState: EditorStateService,
   ) {}
 
-  ngAfterViewInit(): void {
+  public ngAfterViewInit(): void {
     this.zone.runOutsideAngular(() => this.initStage());
 
     window.addEventListener('keydown', this.handleKeyDown);
   }
 
-  ngOnDestroy(): void {
+  public ngOnDestroy(): void {
     this.stage.destroy();
 
     window.removeEventListener('keydown', this.handleKeyDown);
@@ -66,11 +68,11 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   // ---------- SNAPSHOT ----------
 
-  getSnapshot(): void {
+  public getSnapshot(): void {
     console.log(this.editorState.exportSnapshot());
   }
 
-  setSnapshot(): void {
+  public setSnapshot(): void {
     const mockSnapshot: IEditorSnapshot = {
       nodes: [
         {
@@ -96,6 +98,22 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     };
 
     this.loadFromSnapshot(mockSnapshot);
+  }
+
+  public undo(): void {
+    const current = this.editorState.exportSnapshot();
+    const snapshot = this.undoRedo.undo(current);
+    if (!snapshot) return;
+
+    this.loadFromSnapshot(snapshot);
+  }
+
+  public redo(): void {
+    const current = this.editorState.exportSnapshot();
+    const snapshot = this.undoRedo.redo(current);
+    if (!snapshot) return;
+
+    this.loadFromSnapshot(snapshot);
   }
 
   private loadFromSnapshot(snapshot: IEditorSnapshot): void {
@@ -266,11 +284,18 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   // ---------- NODES ----------
 
   private seedDemoNodes(): void {
-    this.createNode('trigger-1', 'trigger', { x: 120, y: 220 }, 'Trigger');
-    this.createNode('action-1', 'action', { x: 420, y: 220 }, 'Action');
-    this.createNode('action-2', 'action', { x: 620, y: 520 }, 'Action');
+    this.createNode('trigger-1', 'trigger', { x: 120, y: 220 }, 'TRIGGER');
+    this.createNode('action-1', 'action', { x: 420, y: 220 }, 'ACTION');
+    this.createNode('action-2', 'action', { x: 620, y: 520 }, 'ACTION');
   }
 
+  // Создает ноду и запоминает состояние для undo/redo
+  createNodeWithHistory(...args: Parameters<typeof this.createNode>): void {
+    this.undoRedo.push(this.editorState.exportSnapshot());
+    this.createNode(...args);
+  }
+
+  // Создает ноду БЕЗ сохранения истории
   private createNode(
     id: string,
     type: NodeType,
@@ -428,6 +453,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private createEdge(from: IPort, to: IPort): void {
+    this.undoRedo.push(this.editorState.exportSnapshot());
+
     const p1 = this.getPortStagePosition(from);
     const p2 = this.getPortStagePosition(to);
 
@@ -546,9 +573,32 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       e.preventDefault();
       this.duplicateSelection();
     }
+
+    // Undo
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      this.undo();
+      return;
+    }
+
+    // Redo Ctrl+Y
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      this.redo();
+      return;
+    }
+
+    // Redo Ctrl+Shift+Z
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      this.redo();
+      return;
+    }
   };
 
   private deleteSelection(): void {
+    this.undoRedo.push(this.editorState.exportSnapshot());
+
     // ---- Удаляем выделенные ребра ----
     for (const edgeId of Array.from(this.editorState.selectedEdges)) {
       const edge = this.editorState.edges.get(edgeId);
@@ -585,6 +635,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private duplicateSelection(): void {
+    this.undoRedo.push(this.editorState.exportSnapshot());
+
     const selected = Array.from(this.editorState.selectedNodes);
     if (!selected.length) return;
 
