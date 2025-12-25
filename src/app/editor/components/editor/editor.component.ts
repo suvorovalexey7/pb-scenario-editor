@@ -21,6 +21,7 @@ import { IPort } from '../../interfaces/port.interface';
 import { NodeType } from '../../types/node.type';
 import { PortType } from '../../types/port.type';
 import { EdgeGeometryCalculator } from '../../helpers/edge-geometry-calculator';
+import { SelectionController } from '../../controllers/selection.controller';
 
 @Component({
   selector: 'app-editor',
@@ -39,6 +40,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private panZoomController!: PanZoomController;
   private edgeController = new EdgeInteractionController();
+
+  private selectionLayer!: Konva.Layer;
+  private selectionRect?: Konva.Rect;
+  private selection = new SelectionController();
 
   private tempLine?: Konva.Line;
 
@@ -131,31 +136,97 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.backgroundLayer = new Konva.Layer({ listening: true });
     this.edgeLayer = new Konva.Layer();
     this.nodeLayer = new Konva.Layer();
+    this.selectionLayer = new Konva.Layer();
 
-    this.stage.add(this.backgroundLayer, this.edgeLayer, this.nodeLayer);
+    this.stage.add(
+      this.backgroundLayer,
+      this.edgeLayer,
+      this.nodeLayer,
+      this.selectionLayer,
+    );
 
     this.drawBackgroundGrid();
 
     this.panZoomController = new PanZoomController(this.stage);
 
+    this.stage.container().addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+    });
+
     this.stage.on('mousedown', (e) => {
-      // клик именно по фону (stage), а не по ноде/линии/порту
-      if (e.target === this.stage) {
+      const isLeft = e.evt.button === 0;
+      const isRight = e.evt.button === 2;
+
+      // ---- ЛЕВАЯ КНОПКА → рамка выделения ----
+      if (isLeft && e.target === this.stage) {
+        const pointer = this.stage.getPointerPosition();
+        if (pointer) {
+          const pos = this.toStageCoords(pointer);
+
+          this.selection.startSelection(pos);
+
+          this.selectionRect = new Konva.Rect({
+            x: pos.x,
+            y: pos.y,
+            width: 0,
+            height: 0,
+            stroke: '#38bdf8',
+            strokeWidth: 1,
+            dash: [4, 4],
+            fill: 'rgba(56,189,248,0.12)',
+          });
+
+          this.selectionLayer.add(this.selectionRect);
+          this.selectionLayer.batchDraw();
+        }
+
+        // простой клик без рамки — очистка выделения
         this.editorState.clearSelection();
         this.refreshSelectionView();
+
+        return; // ❗️ ВАЖНО — НЕ ДАЁМ панорамированию запуститься
       }
 
-      this.panZoomController.onMouseDown(e);
+      // ---- ПРАВАЯ КНОПКА → PAN ----
+      if (isRight) {
+        this.panZoomController.onMouseDown(e);
+      }
     });
 
     this.stage.on('mousemove', () => {
+      // ---- UPDATE SELECTION ----
+      if (this.selection.isActive() && this.selectionRect) {
+        const pointer = this.stage.getPointerPosition();
+        if (pointer) {
+          const pos = this.toStageCoords(pointer);
+          this.selection.update(pos);
+
+          const box = this.selection.getBounds();
+          if (box) {
+            this.selectionRect.setAttrs(box);
+            this.selectionLayer.batchDraw();
+            this.applySelectionPreview();
+          }
+        }
+      }
+
       if (this.edgeController.isDragging() && this.tempLine) {
         this.updateTempEdge();
       }
+
       this.panZoomController.onMouseMove();
     });
 
     this.stage.on('mouseup', () => {
+      // ---- FINISH SELECTION ----
+      if (this.selection.isActive()) {
+        this.finalizeSelection();
+      }
+
+      this.selection.finish();
+      this.selectionRect?.destroy();
+      this.selectionRect = undefined;
+
       this.panZoomController.onMouseUp();
       this.finishEdgeDrag();
     });
@@ -576,5 +647,39 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.edgeLayer.batchDraw();
   }
 
+  // Логика выбора нод рамкой
+  private applySelectionPreview(): void {
+    const box = this.selection.getBounds();
+    if (!box) return;
 
+    const isMultiAppend =
+      window.event instanceof MouseEvent &&
+      (window.event as MouseEvent).shiftKey;
+
+    if (!isMultiAppend) {
+      this.editorState.clearSelection();
+    }
+
+    for (const node of this.editorState.nodes.values()) {
+      const pos = node.group.position();
+      const width = 160;
+      const height = 70;
+
+      const inside =
+        pos.x >= box.x &&
+        pos.y >= box.y &&
+        pos.x + width <= box.x + box.width &&
+        pos.y + height <= box.y + box.height;
+
+      if (inside) {
+        this.editorState.selectedNodes.add(node.id);
+      }
+    }
+
+    this.refreshSelectionView();
+  }
+
+  private finalizeSelection(): void {
+    this.applySelectionPreview();
+  }
 }
