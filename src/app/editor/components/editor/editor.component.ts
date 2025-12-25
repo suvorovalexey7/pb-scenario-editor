@@ -499,40 +499,81 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   private duplicateSelection(): void {
     const selected = Array.from(this.editorState.selectedNodes);
-
     if (!selected.length) return;
 
-    const newNodeIds = new Map<string, string>(); // oldId -> newId
+    const nodeIdMap = new Map<string, string>(); // oldNodeId -> newNodeId
+    const portIdMap = new Map<string, string>(); // oldPortId -> newPortId
 
+    // ---------- 1) Дублируем ноды ----------
     for (const nodeId of selected) {
       const node = this.editorState.nodes.get(nodeId);
       if (!node) continue;
 
-      // Нельзя дублировать trigger
-      if (node.type === 'trigger') continue;
+      if (node.type === 'trigger') continue; // запрещено
 
-      const newId = `${node.type}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const newId = `${node.type}-${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`;
+
+      nodeIdMap.set(nodeId, newId);
 
       const pos = node.group.position();
 
-      // создаём НОВЫЙ блок
+      // создаём новую ноду
       this.createNode(
         newId,
         node.type,
-        { x: pos.x + 40, y: pos.y + 40 }, // ⚡️ смещение, чтобы не накладывались
-        `Copy of ${newId}`,
+        { x: pos.x + 40, y: pos.y + 40 },
+        `Copy`
       );
 
-      newNodeIds.set(nodeId, newId);
+      // ---------- 1.1) Mаппим порты ----------
+      const newNode = this.editorState.nodes.get(newId);
+      if (!newNode) continue;
+
+      node.ports.inputs.forEach((p, i) => {
+        portIdMap.set(p.id, newNode.ports.inputs[i].id);
+      });
+
+      node.ports.outputs.forEach((p, i) => {
+        portIdMap.set(p.id, newNode.ports.outputs[i].id);
+      });
     }
 
-    // обновляем selection на новые
+    // ---------- 2) Дублируем связи ----------
+    for (const edge of this.editorState.edges.values()) {
+      // связь имеет смысл копировать
+      // только если обе ноды из selection
+      if (
+        !nodeIdMap.has(edge.fromNodeId) ||
+        !nodeIdMap.has(edge.toNodeId)
+      ) {
+        continue;
+      }
+
+      const newFromPort = portIdMap.get(edge.fromPortId);
+      const newToPort = portIdMap.get(edge.toPortId);
+
+      if (!newFromPort || !newToPort) {
+        continue;
+      }
+
+      const from = this.editorState.findPort(newFromPort);
+      const to = this.editorState.findPort(newToPort);
+
+      if (from && to) {
+        this.createEdge(from, to);
+      }
+    }
+
+    // ---------- 3) Обновляем selection ----------
     this.editorState.clearSelection();
-    for (const id of newNodeIds.values()) {
+    for (const id of nodeIdMap.values()) {
       this.editorState.selectedNodes.add(id);
     }
 
     this.nodeLayer.batchDraw();
+    this.edgeLayer.batchDraw();
   }
 
 
