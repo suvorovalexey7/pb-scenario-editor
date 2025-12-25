@@ -3,6 +3,7 @@ import { IEditorSnapshot } from '../interfaces/editor-snapshot.interface';
 import { IEdge } from '../interfaces/edge.interface';
 import { INode } from '../interfaces/node.interface';
 import { IPort } from '../interfaces/port.interface';
+import Konva from 'konva';
 
 @Injectable({ providedIn: 'root' })
 export class EditorStateService {
@@ -27,6 +28,12 @@ export class EditorStateService {
    * Выделенные соединительные линии.
    */
   readonly selectedEdges = new Set<string>();
+
+  camera = {
+    x: 0,
+    y: 0,
+    scale: 1,
+  };
 
   /**
    * Делает ноду известной редактору.
@@ -152,5 +159,17 @@ export class EditorStateService {
   clearSelection(): void {
     this.selectedNodes.clear();
     this.selectedEdges.clear();
+  }
+
+  setCamera(x: number, y: number, scale: number): void {
+    this.camera = { x, y, scale };
+  }
+
+  updateCameraFromStage(stage: Konva.Stage): void {
+    this.camera = {
+      x: stage.x(),
+      y: stage.y(),
+      scale: stage.scaleX(),
+    };
   }
 }
