@@ -217,15 +217,28 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       align: 'center',
     });
 
-    const ports: INode['ports'] = {};
+    const ports: INode['ports'] = {
+      inputs: [],
+      outputs: [],
+    };
 
     if (type === 'action') {
-      ports.input = this.createPort(id, 'input', 35, group);
+      ports.inputs.push(
+        this.createPort(id, 'input', 35, group)
+      );
     }
 
-    ports.output = this.createPort(id, 'output', 35, group, 160);
+    ports.outputs.push(
+      this.createPort(id, 'output', 35, group, 160)
+    );
 
-    group.add(rect, text, ...(ports.input ? [ports.input.circle] : []), ports.output.circle);
+    group.add(
+      rect,
+      text,
+      ...ports.inputs.map(p => p.circle),
+      ...ports.outputs.map(p => p.circle),
+    );
+
     this.nodeLayer.add(group);
     this.nodeLayer.draw();
 
@@ -233,19 +246,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     group.on('dragmove', () => this.updateEdgesForNode(id));
 
-    ports.output.circle.on('mousedown', (e) => {
-      e.cancelBubble = true;
-      this.startEdgeDrag(ports.output!);
+    ports.outputs.forEach(output => {
+      output.circle.on('mousedown', (e) => {
+        e.cancelBubble = true;
+        this.startEdgeDrag(output);
+      });
     });
 
-    if (ports.input) {
-      ports.input.circle.on('mouseenter', () =>
-        this.edgeController.setHoveredInput(ports.input),
+    ports.inputs.forEach(input => {
+      input.circle.on('mouseenter', () =>
+        this.edgeController.setHoveredInput(input),
       );
-      ports.input.circle.on('mouseleave', () =>
+      input.circle.on('mouseleave', () =>
         this.edgeController.setHoveredInput(undefined),
       );
-    }
+    });
   }
 
   private createPort(

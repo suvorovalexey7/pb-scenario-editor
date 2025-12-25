@@ -43,13 +43,15 @@ export class EditorStateService {
    */
   findPort(portId: string): IPort | undefined {
     for (const node of this.nodes.values()) {
-      if (node.ports.input?.id === portId) {
-        return node.ports.input;
-      }
-      if (node.ports.output?.id === portId) {
-        return node.ports.output;
-      }
+      const all = [
+        ...node.ports.inputs,
+        ...node.ports.outputs,
+      ];
+
+      const found = all.find(p => p.id === portId);
+      if (found) return found;
     }
+
     return undefined;
   }
 

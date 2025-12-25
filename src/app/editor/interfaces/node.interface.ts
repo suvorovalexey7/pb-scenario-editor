@@ -11,7 +11,7 @@ export interface INode {
   type: NodeType;
   group: Konva.Group;
   ports: {
-    input?: IPort;
-    output?: IPort;
+    inputs: IPort[];
+    outputs: IPort[];
   };
 }
