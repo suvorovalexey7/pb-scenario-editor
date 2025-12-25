@@ -172,4 +172,31 @@ export class EditorStateService {
       scale: stage.scaleX(),
     };
   }
+
+  deleteNode(id: string): void {
+    const node = this.nodes.get(id);
+    if (!node) return;
+
+    // удалить связанные ребра
+    for (const [edgeId, edge] of this.edges) {
+      if (edge.fromNodeId === id || edge.toNodeId === id) {
+        this.deleteEdge(edgeId);
+      }
+    }
+
+    // убрать из selection
+    this.selectedNodes.delete(id);
+
+    // удалить ноду из state
+    this.nodes.delete(id);
+  }
+
+  deleteEdge(id: string): void {
+    const edge = this.edges.get(id);
+    if (!edge) return;
+
+    this.selectedEdges.delete(id);
+    this.edges.delete(id);
+  }
+
 }

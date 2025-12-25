@@ -49,10 +49,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.zone.runOutsideAngular(() => this.initStage());
+
+    window.addEventListener('keydown', this.handleKeyDown);
   }
 
   ngOnDestroy(): void {
     this.stage.destroy();
+
+    window.removeEventListener('keydown', this.handleKeyDown);
   }
 
   // ---------- SNAPSHOT ----------
@@ -442,6 +446,49 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     }
 
     this.nodeLayer.batchDraw();
+  }
+
+  private handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      this.deleteSelection();
+    }
+  };
+
+  private deleteSelection(): void {
+
+    // ---- Удаляем выделенные ребра ----
+    for (const edgeId of Array.from(this.editorState.selectedEdges)) {
+      const edge = this.editorState.edges.get(edgeId);
+      if (!edge) continue;
+
+      edge.line.destroy();
+      this.editorState.deleteEdge(edgeId);
+    }
+
+    // ---- Удаляем выделенные ноды ----
+    for (const nodeId of Array.from(this.editorState.selectedNodes)) {
+      const node = this.editorState.nodes.get(nodeId);
+      if (!node) continue;
+
+      // 🔥 Уничтожаем линии, которые связаны с нодой
+      for (const edge of this.editorState.edges.values()) {
+        if (edge.fromNodeId === nodeId || edge.toNodeId === nodeId) {
+          edge.line.destroy();
+          this.editorState.deleteEdge(edge.id);
+        }
+      }
+
+      // 🔥 Уничтожаем визуальную группу ноды
+      node.group.destroy();
+
+      // 🔥 Чистим state ноды
+      this.editorState.deleteNode(nodeId);
+    }
+
+    this.edgeLayer.batchDraw();
+    this.nodeLayer.batchDraw();
+
+    this.editorState.clearSelection();
   }
 
 }
