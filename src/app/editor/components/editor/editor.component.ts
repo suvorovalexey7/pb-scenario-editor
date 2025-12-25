@@ -435,13 +435,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       points: [p1.x, p1.y, p2.x, p2.y],
       stroke: '#e5e7eb',
       strokeWidth: 2,
+      hitStrokeWidth: 10,               // 👈 удобно кликать
     });
 
     this.edgeLayer.add(line);
     this.edgeLayer.draw();
 
     const edge: IEdge = {
-      id: `edge-${Date.now()}`,
+      id: `edge-${Date.now()}-${Math.random()}`,
       fromNodeId: from.nodeId,
       toNodeId: to.nodeId,
       fromPortId: from.id,
@@ -451,7 +452,10 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     };
 
     this.editorState.addEdge(edge);
+
+    this.registerEdgeInteractions(edge); // 👈 ВАЖНО
   }
+
 
   private updateEdgesForNode(nodeId: string): void {
     for (const edge of this.editorState.edges.values()) {
@@ -499,16 +503,14 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private refreshSelectionView(): void {
+    // ------- НОДЫ -------
     for (const node of this.editorState.nodes.values()) {
       const isSelected = this.editorState.selectedNodes.has(node.id);
-
       const rect = node.group.findOne<Konva.Rect>('.node-rect');
-      if (!rect) {
-        continue;
-      }
+      if (!rect) continue;
 
       if (isSelected) {
-        rect.stroke('#cd19b1');  // голубая рамка
+        rect.stroke('#b11aef');
         rect.strokeWidth(3);
       } else {
         rect.stroke(undefined as any);
@@ -516,7 +518,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    // ------- ЛИНИИ -------
+    for (const edge of this.editorState.edges.values()) {
+      const isSelected = this.editorState.selectedEdges.has(edge.id);
+
+      if (isSelected) {
+        edge.line.stroke('#b11aef');
+        edge.line.strokeWidth(3);
+      } else {
+        edge.line.stroke('#e5e7eb');
+        edge.line.strokeWidth(2);
+      }
+    }
+
     this.nodeLayer.batchDraw();
+    this.edgeLayer.batchDraw();
   }
 
   // Обрабатываем хоткеи
@@ -682,4 +698,27 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private finalizeSelection(): void {
     this.applySelectionPreview();
   }
+
+  private registerEdgeInteractions(edge: IEdge): void {
+    edge.line.on('mousedown', (e) => {
+      e.cancelBubble = true;
+
+      const isMulti =
+        e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey;
+
+      if (isMulti) {
+        if (this.editorState.selectedEdges.has(edge.id)) {
+          this.editorState.selectedEdges.delete(edge.id);
+        } else {
+          this.editorState.selectedEdges.add(edge.id);
+        }
+      } else {
+        this.editorState.clearSelection();
+        this.editorState.selectedEdges.add(edge.id);
+      }
+
+      this.refreshSelectionView();
+    });
+  }
+
 }
