@@ -25,6 +25,7 @@ import { SelectionController } from '../../controllers/selection.controller';
 import { UndoRedoService } from '../../services/undo-redo.service';
 import { AsyncPipe } from '@angular/common';
 import { MultiDragController } from '../../controllers/multi-drag.controller';
+import { createGridPattern } from '../../helpers/grid-pattern';
 
 @Component({
   selector: 'app-editor',
@@ -263,29 +264,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private drawBackgroundGrid(): void {
-    const gridSize = 40;
-    const { width, height } = this.stage.size();
+    const pattern = createGridPattern(40, '#1e293b', 1);
 
-    for (let i = 0; i < width / gridSize; i++) {
-      this.backgroundLayer.add(
-        new Konva.Line({
-          points: [i * gridSize, 0, i * gridSize, height],
-          stroke: '#1e293b',
-        }),
-      );
-    }
+    const rect = new Konva.Rect({
+      x: -50000,
+      y: -50000,
+      width: 100000,
+      height: 100000,
+      fillPatternImage: pattern as unknown as HTMLImageElement,
+      listening: false,   // важно для перфоманса
+    });
 
-    for (let j = 0; j < height / gridSize; j++) {
-      this.backgroundLayer.add(
-        new Konva.Line({
-          points: [0, j * gridSize, width, j * gridSize],
-          stroke: '#1e293b',
-        }),
-      );
-    }
-
+    this.backgroundLayer.add(rect);
     this.backgroundLayer.draw();
   }
+
 
   // ---------- NODES ----------
 
