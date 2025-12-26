@@ -4,14 +4,14 @@
 
   <button
     (click)="undo()"
-    [disabled]="!undoRedo.canUndo()"
+    [disabled]="!(undoRedo.canUndo$ | async)"
   >
     Undo
   </button>
 
   <button
     (click)="redo()"
-    [disabled]="!undoRedo.canRedo()"
+    [disabled]="!(undoRedo.canRedo$ | async)"
   >
     Redo
   </button>

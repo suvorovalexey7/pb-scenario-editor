@@ -23,6 +23,8 @@ import { PortType } from '../../types/port.type';
 import { EdgeGeometryCalculator } from '../../helpers/edge-geometry-calculator';
 import { SelectionController } from '../../controllers/selection.controller';
 import { UndoRedoService } from '../../services/undo-redo.service';
+import { AsyncPipe } from '@angular/common';
+import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-editor',
@@ -30,6 +32,9 @@ import { UndoRedoService } from '../../services/undo-redo.service';
   templateUrl: './editor.component.html',
   styleUrls: ['./editor.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    AsyncPipe
+  ]
 })
 export class EditorComponent implements AfterViewInit, OnDestroy {
   @ViewChild('container', { static: true }) containerRef!: ElementRef<HTMLDivElement>;
@@ -49,7 +54,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private tempLine?: Konva.Line;
 
   constructor(
-    public readonly undoRedo: UndoRedoService,
+    public undoRedo: UndoRedoService,
     private readonly zone: NgZone,
     private readonly editorState: EditorStateService,
   ) {}
@@ -295,6 +300,12 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     this.createNode(...args);
   }
 
+  // Создает связь и запоминает состояние для undo/redo
+  private createEdgeWithHistory(from: IPort, to: IPort): void {
+    this.undoRedo.push(this.editorState.exportSnapshot());
+    this.createEdge(from, to);
+  }
+
   // Создает ноду БЕЗ сохранения истории
   private createNode(
     id: string,
@@ -445,16 +456,15 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     const result = this.edgeController.finishDrag();
 
     if (result) {
-      this.createEdge(result.from, result.to);
+      this.createEdgeWithHistory(result.from, result.to);
     }
 
     this.tempLine?.destroy();
     this.tempLine = undefined;
   }
 
+  // Создает связь БЕЗ сохранения истории
   private createEdge(from: IPort, to: IPort): void {
-    this.undoRedo.push(this.editorState.exportSnapshot());
-
     const p1 = this.getPortStagePosition(from);
     const p2 = this.getPortStagePosition(to);
 
@@ -462,7 +472,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
       points: [p1.x, p1.y, p2.x, p2.y],
       stroke: '#e5e7eb',
       strokeWidth: 2,
-      hitStrokeWidth: 10,               // 👈 удобно кликать
+      hitStrokeWidth: 10,
     });
 
     this.edgeLayer.add(line);
@@ -479,10 +489,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     };
 
     this.editorState.addEdge(edge);
-
-    this.registerEdgeInteractions(edge); // 👈 ВАЖНО
+    this.registerEdgeInteractions(edge);
   }
-
 
   private updateEdgesForNode(nodeId: string): void {
     for (const edge of this.editorState.edges.values()) {

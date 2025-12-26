@@ -1,5 +1,6 @@
-import { Injectable } from '@angular/core';
+import { Injectable, NgZone } from '@angular/core';
 import { IEditorSnapshot } from '../interfaces/editor-snapshot.interface';
+import { BehaviorSubject } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class UndoRedoService {
@@ -7,6 +8,14 @@ export class UndoRedoService {
   private redoStack: IEditorSnapshot[] = [];
 
   private readonly LIMIT = 10;
+
+  private canUndoSubject = new BehaviorSubject<boolean>(false);
+  private canRedoSubject = new BehaviorSubject<boolean>(false);
+
+  canUndo$ = this.canUndoSubject.asObservable();
+  canRedo$ = this.canRedoSubject.asObservable();
+
+  constructor(private readonly zone: NgZone) {}
 
   push(snapshot: IEditorSnapshot): void {
     this.undoStack.push(structuredClone(snapshot));
@@ -16,36 +25,41 @@ export class UndoRedoService {
     }
 
     this.redoStack = [];
-  }
 
-  public canUndo(): boolean {
-    return this.undoStack.length > 0;
-  }
-
-  public canRedo(): boolean {
-    return this.redoStack.length > 0;
+    this.updateFlags();
   }
 
   undo(current: IEditorSnapshot): IEditorSnapshot | null {
-    if (!this.canUndo()) return null;
+    if (!this.undoStack.length) return null;
 
     const snapshot = this.undoStack.pop()!;
     this.redoStack.push(structuredClone(current));
 
+    this.updateFlags();
     return structuredClone(snapshot);
   }
 
   redo(current: IEditorSnapshot): IEditorSnapshot | null {
-    if (!this.canRedo()) return null;
+    if (!this.redoStack.length) return null;
 
     const snapshot = this.redoStack.pop()!;
     this.undoStack.push(structuredClone(current));
 
+    this.updateFlags();
     return structuredClone(snapshot);
   }
 
   clear(): void {
     this.undoStack = [];
     this.redoStack = [];
+
+    this.updateFlags();
+  }
+
+  private updateFlags(): void {
+    this.zone.run(() => {
+      this.canUndoSubject.next(this.undoStack.length > 0);
+      this.canRedoSubject.next(this.redoStack.length > 0);
+    });
   }
 }
