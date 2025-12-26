@@ -1,10 +1,25 @@
 .settings-container {
-  height: 30vh;
+  height: 5vh;
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+
+  .btn {
+    background: #ac09e3;
+    color: #fff;
+    cursor: pointer;
+    height: 2rem;
+    border-radius: 25px;
+    border: none;
+    padding: 0 1rem;
+    margin: 0 5px;
+  }
 }
 
 .editor-container {
-  height: 70vh;
+  height: 95vh;
   width: 100%;
   background: #0f172a;
 }

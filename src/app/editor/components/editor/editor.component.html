@@ -1,20 +1,22 @@
 <div class="settings-container">
-  <button (click)="getSnapshot()">Получить текущий снепшот</button>
-  <button (click)="setSnapshot()">Загрузить имеющийся снепшот</button>
+  <button class="btn" (click)="getSnapshot()">Получить текущий снепшот</button>
+  <button class="btn" (click)="setSnapshot()">Загрузить моковый снепшот</button>
 
-  <button
-    (click)="undo()"
-    [disabled]="!(undoRedo.canUndo$ | async)"
-  >
-    Undo
-  </button>
+  <div>
+    <button
+      (click)="undo()"
+      [disabled]="!(undoRedo.canUndo$ | async)"
+    >
+      Undo
+    </button>
 
-  <button
-    (click)="redo()"
-    [disabled]="!(undoRedo.canRedo$ | async)"
-  >
-    Redo
-  </button>
+    <button
+      (click)="redo()"
+      [disabled]="!(undoRedo.canRedo$ | async)"
+    >
+      Redo
+    </button>
+  </div>
 </div>
 
 <div #container class="editor-container"></div>
