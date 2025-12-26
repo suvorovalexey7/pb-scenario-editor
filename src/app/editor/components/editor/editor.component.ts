@@ -363,10 +363,27 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
     this.editorState.addNode({ id, type, group, ports });
 
-    group.on('dragmove', () => this.updateEdgesForNode(id));
+    // ========= UNDO / REDO MOVE =========
+    let dragStarted = false;
+
+    group.on('dragstart', () => {
+      if (!dragStarted) {
+        this.undoRedo.push(this.editorState.exportSnapshot());
+        dragStarted = true;
+      }
+    });
+
+    group.on('dragmove', () => {
+      this.updateEdgesForNode(id);
+    });
+
+    group.on('dragend', () => {
+      dragStarted = false;
+    });
+    // ====================================
+
 
     group.on('mousedown', (e) => {
-      // чтобы клик по ноде не запускал pan на stage
       e.cancelBubble = true;
 
       const isMulti =
