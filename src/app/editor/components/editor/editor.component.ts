@@ -24,7 +24,7 @@ import { EdgeGeometryCalculator } from '../../helpers/edge-geometry-calculator';
 import { SelectionController } from '../../controllers/selection.controller';
 import { UndoRedoService } from '../../services/undo-redo.service';
 import { AsyncPipe } from '@angular/common';
-import { Observable } from 'rxjs';
+import { MultiDragController } from '../../controllers/multi-drag.controller';
 
 @Component({
   selector: 'app-editor',
@@ -50,6 +50,7 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
   private selectionLayer!: Konva.Layer;
   private selectionRect?: Konva.Rect;
   private selection = new SelectionController();
+  private multiDrag = new MultiDragController();
 
   private tempLine?: Konva.Line;
 
@@ -367,18 +368,49 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     let dragStarted = false;
 
     group.on('dragstart', () => {
-      if (!dragStarted) {
-        this.undoRedo.push(this.editorState.exportSnapshot());
-        dragStarted = true;
-      }
+      // 1️⃣ фиксируем состояние до перемещения (один раз на drag)
+      this.undoRedo.push(this.editorState.exportSnapshot());
+
+      const selected = this.editorState.selectedNodes;
+      const isSelected = selected.has(id);
+      const hasMulti = selected.size > 1;
+
+      const idsToMove = (isSelected && hasMulti)
+        ? Array.from(selected)
+        : [id];
+
+      this.multiDrag.beginDrag(
+        id,
+        idsToMove,
+        (nodeId) => {
+          const n = this.editorState.nodes.get(nodeId);
+          if (!n) return { x: 0, y: 0 };
+          return n.group.position();
+        }
+      );
     });
 
     group.on('dragmove', () => {
-      this.updateEdgesForNode(id);
+      const pos = group.position();
+      const updates = this.multiDrag.apply(pos);
+
+      for (const [nodeId, newPos] of updates.entries()) {
+        const node = this.editorState.nodes.get(nodeId);
+        if (!node) continue;
+
+        if (nodeId === id) {
+          // мастер уже стоит правильно
+          this.updateEdgesForNode(nodeId);
+          continue;
+        }
+
+        node.group.position(newPos);
+        this.updateEdgesForNode(nodeId);
+      }
     });
 
     group.on('dragend', () => {
-      dragStarted = false;
+      this.multiDrag.end();
     });
     // ====================================
 
@@ -386,13 +418,21 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
     group.on('mousedown', (e) => {
       e.cancelBubble = true;
 
-      const isMulti =
+      const isMultiKey =
         e.evt.shiftKey || e.evt.metaKey || e.evt.ctrlKey;
 
-      if (isMulti) {
+      const alreadySelected = this.editorState.selectedNodes.has(id);
+      const multiSelected = this.editorState.selectedNodes.size > 1;
+
+      if (isMultiKey) {
+        // явное множественное выделение пользователем
         this.editorState.toggleNode(id);
       } else {
-        this.editorState.selectNode(id);
+        // 🔥 КЛЮЧЕВАЯ ЧАСТЬ:
+        // если нода уже часть мульти-выделения — НИЧЕГО не меняем
+        if (!(alreadySelected && multiSelected)) {
+          this.editorState.selectNode(id);
+        }
       }
 
       this.refreshSelectionView();
